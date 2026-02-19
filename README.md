@@ -51,7 +51,7 @@ docker compose --profile prod --profile gpu up -d --build
 SR_PROVIDER=sr4rs
 SR4RS_SCRIPT_PATH=/opt/sr4rs/code/sr.py
 SR4RS_MODEL_DIR=/workspace/.cache/sr4rs/sr4rs_sentinel2_bands4328_france2020_savedmodel
-SR4RS_MODEL_URL=https://nextcloud.inrae.fr/s/6xM4jRzYx2A9Qn4/download?path=%2F&files=sr4rs_sentinel2_bands4328_france2020_savedmodel.zip
+SR4RS_MODEL_URL=https://nextcloud.inrae.fr/s/boabW9yCjdpLPGX/download/sr4rs_sentinel2_bands4328_france2020_savedmodel.zip
 ```
 - SR jobs route to `sr_gpu` automatically when `include_sr=true` and `SR_PROVIDER=sr4rs`.
 - Model files are cached under `/Users/mohamedboujaha/2025projects/fieldmonitoring25m/storage/sr4rs-cache`.

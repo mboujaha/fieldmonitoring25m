@@ -24,6 +24,15 @@ from shapely.geometry.base import BaseGeometry
 
 from app.core.config import Settings, get_settings
 
+SR4RS_MODEL_URL_CURRENT = (
+    "https://nextcloud.inrae.fr/s/boabW9yCjdpLPGX/download/"
+    "sr4rs_sentinel2_bands4328_france2020_savedmodel.zip"
+)
+SR4RS_MODEL_URL_LEGACY = (
+    "https://nextcloud.inrae.fr/s/6xM4jRzYx2A9Qn4/download"
+    "?path=%2F&files=sr4rs_sentinel2_bands4328_france2020_savedmodel.zip"
+)
+
 
 class SRInferenceError(RuntimeError):
     pass
@@ -125,6 +134,16 @@ class SR4RSInferenceEngine(BaseSREngine):
             runtime_class="GPU",
         )
 
+    def _candidate_model_urls(self) -> list[str]:
+        candidates: list[str] = []
+        configured = (self.model_url or "").strip()
+        if configured:
+            candidates.append(configured)
+        for fallback in [SR4RS_MODEL_URL_CURRENT, SR4RS_MODEL_URL_LEGACY]:
+            if fallback not in candidates:
+                candidates.append(fallback)
+        return candidates
+
     def get_capabilities(self) -> SRCapabilities:
         return self._capabilities
 
@@ -146,38 +165,48 @@ class SR4RSInferenceEngine(BaseSREngine):
             self.model_dir = existing
             return existing
 
-        if not self.model_url:
-            raise SRInferenceError("SR4RS model not found and SR4RS_MODEL_URL is empty")
-
         self.model_dir.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_file:
-            zip_path = Path(tmp_file.name)
+        errors: list[str] = []
+        for candidate_url in self._candidate_model_urls():
+            with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_file:
+                zip_path = Path(tmp_file.name)
 
-        if httpx is not None:
-            with httpx.Client(timeout=self.timeout_seconds) as client:
-                response = client.get(self.model_url)
-                response.raise_for_status()
-                zip_path.write_bytes(response.content)
-        else:
-            request = Request(self.model_url, method="GET")
             try:
-                with urlopen(request, timeout=self.timeout_seconds) as response:
-                    zip_path.write_bytes(response.read())
-            except (HTTPError, URLError) as exc:
-                raise SRInferenceError(f"SR4RS model download failed: {exc}") from exc
+                if httpx is not None:
+                    with httpx.Client(timeout=self.timeout_seconds) as client:
+                        response = client.get(candidate_url)
+                        response.raise_for_status()
+                        zip_path.write_bytes(response.content)
+                else:
+                    request = Request(candidate_url, method="GET")
+                    with urlopen(request, timeout=self.timeout_seconds) as response:
+                        zip_path.write_bytes(response.read())
+            except Exception as exc:
+                errors.append(f"{candidate_url} ({exc})")
+                zip_path.unlink(missing_ok=True)
+                continue
 
-        try:
-            with zipfile.ZipFile(zip_path) as archive:
-                archive.extractall(self.model_dir.parent)
-        finally:
-            zip_path.unlink(missing_ok=True)
+            try:
+                with zipfile.ZipFile(zip_path) as archive:
+                    archive.extractall(self.model_dir.parent)
+            except Exception as exc:
+                errors.append(f"{candidate_url} (invalid archive: {exc})")
+                zip_path.unlink(missing_ok=True)
+                continue
+            finally:
+                zip_path.unlink(missing_ok=True)
 
-        extracted = self._find_saved_model_dir(self.model_dir.parent)
-        if not extracted:
-            raise SRInferenceError("Could not locate saved_model.pb after SR4RS model extraction")
+            extracted = self._find_saved_model_dir(self.model_dir.parent)
+            if extracted:
+                self.model_dir = extracted
+                return extracted
+            errors.append(f"{candidate_url} (saved_model.pb not found after extraction)")
 
-        self.model_dir = extracted
-        return extracted
+        raise SRInferenceError(
+            "Could not download/load SR4RS model. "
+            f"Tried URLs: {', '.join(self._candidate_model_urls())}. "
+            f"Errors: {' | '.join(errors) if errors else 'unknown'}"
+        )
 
     def generate(self, request: SRRequest) -> dict[str, np.ndarray]:
         missing = [band for band in self.input_order if band not in request.native_bands]

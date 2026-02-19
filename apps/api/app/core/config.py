@@ -44,7 +44,7 @@ class Settings(BaseSettings):
         alias="SR4RS_MODEL_DIR",
     )
     sr4rs_model_url: str = Field(
-        default="https://nextcloud.inrae.fr/s/6xM4jRzYx2A9Qn4/download?path=%2F&files=sr4rs_sentinel2_bands4328_france2020_savedmodel.zip",
+        default="https://nextcloud.inrae.fr/s/boabW9yCjdpLPGX/download/sr4rs_sentinel2_bands4328_france2020_savedmodel.zip",
         alias="SR4RS_MODEL_URL",
     )
     sr4rs_timeout_seconds: int = Field(default=1800, alias="SR4RS_TIMEOUT_SECONDS")
