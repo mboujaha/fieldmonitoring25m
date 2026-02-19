@@ -28,6 +28,7 @@ SR4RS_MODEL_URL_CURRENT = (
     "https://nextcloud.inrae.fr/s/boabW9yCjdpLPGX/download/"
     "sr4rs_sentinel2_bands4328_france2020_savedmodel.zip"
 )
+SR4RS_MODEL_URL_DAV = "https://nextcloud.inrae.fr/public.php/dav/files/boabW9yCjdpLPGX/?accept=zip"
 SR4RS_MODEL_URL_LEGACY = (
     "https://nextcloud.inrae.fr/s/6xM4jRzYx2A9Qn4/download"
     "?path=%2F&files=sr4rs_sentinel2_bands4328_france2020_savedmodel.zip"
@@ -139,7 +140,7 @@ class SR4RSInferenceEngine(BaseSREngine):
         configured = (self.model_url or "").strip()
         if configured:
             candidates.append(configured)
-        for fallback in [SR4RS_MODEL_URL_CURRENT, SR4RS_MODEL_URL_LEGACY]:
+        for fallback in [SR4RS_MODEL_URL_CURRENT, SR4RS_MODEL_URL_DAV, SR4RS_MODEL_URL_LEGACY]:
             if fallback not in candidates:
                 candidates.append(fallback)
         return candidates
@@ -174,7 +175,7 @@ class SR4RSInferenceEngine(BaseSREngine):
             try:
                 if httpx is not None:
                     with httpx.Client(timeout=self.timeout_seconds) as client:
-                        response = client.get(candidate_url)
+                        response = client.get(candidate_url, follow_redirects=True)
                         response.raise_for_status()
                         zip_path.write_bytes(response.content)
                 else:
