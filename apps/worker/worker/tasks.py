@@ -9,8 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.models import AnalysisJob, ExportJob, Field, JobStatusEnum
-from app.services.analysis import run_analysis_job
-from app.services.exports import run_export_job
 from worker.celery_app import celery_app
 
 logger = get_task_logger(__name__)
@@ -75,6 +73,8 @@ def _should_enqueue(field: Field, now_utc: datetime) -> bool:
 
 @celery_app.task(name="worker.tasks.run_analysis_task")
 def run_analysis_task(job_id: str) -> dict:
+    from app.services.analysis import run_analysis_job
+
     db = _session()
     try:
         job = db.get(AnalysisJob, uuid.UUID(job_id))
@@ -97,6 +97,8 @@ def run_analysis_task(job_id: str) -> dict:
 
 @celery_app.task(name="worker.tasks.run_export_task")
 def run_export_task(export_id: str) -> dict:
+    from app.services.exports import run_export_job
+
     db = _session()
     try:
         export_job = db.get(ExportJob, uuid.UUID(export_id))
