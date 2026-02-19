@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     sr4rs_timeout_seconds: int = Field(default=1800, alias="SR4RS_TIMEOUT_SECONDS")
     sr4rs_scale_factor: int = Field(default=4, alias="SR4RS_SCALE_FACTOR")
     sr4rs_python_executable: str = Field(default="python3", alias="SR4RS_PYTHON_EXECUTABLE")
+    sr4rs_pad: int = Field(default=64, alias="SR4RS_PAD")
+    sr4rs_tile_size: int = Field(default=512, alias="SR4RS_TILE_SIZE")
 
     s2dr3_external_endpoint: str | None = Field(default=None, alias="S2DR3_EXTERNAL_ENDPOINT")
     s2dr3_external_api_key: str | None = Field(default=None, alias="S2DR3_EXTERNAL_API_KEY")

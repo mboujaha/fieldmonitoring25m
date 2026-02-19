@@ -127,6 +127,8 @@ class SR4RSInferenceEngine(BaseSREngine):
         self.model_url = settings.sr4rs_model_url
         self.timeout_seconds = settings.sr4rs_timeout_seconds
         self.python_executable = settings.sr4rs_python_executable
+        self.min_patch = max(32, settings.sr4rs_pad)
+        self.tile_size = settings.sr4rs_tile_size
         self._capabilities = SRCapabilities(
             model_name="sr4rs",
             model_version="bands4328-france2020",
@@ -222,12 +224,40 @@ class SR4RSInferenceEngine(BaseSREngine):
 
         model_dir = self._ensure_model()
 
+        height, width = next(
+            (arr.shape for arr in [request.native_bands[b] for b in self.input_order] if arr is not None),
+            (0, 0),
+        )
+        if height == 0 or width == 0:
+            raise SRInferenceError("SR4RS input has zero height or width")
+
+        ts_run = min(self.tile_size, height, width)
+        if ts_run < self.min_patch:
+            ts_run = self.min_patch
+        need_pad = height < ts_run or width < ts_run
+        padded_h = max(height, ts_run) if need_pad else height
+        padded_w = max(width, ts_run) if need_pad else width
+        scale = self._capabilities.scale_factor
+
+        bands_to_write = request.native_bands
+        if need_pad:
+            padded_bands = {}
+            for band_name in self.input_order:
+                arr = request.native_bands[band_name].astype(np.float32)
+                padded = np.pad(
+                    arr,
+                    ((0, padded_h - height), (0, padded_w - width)),
+                    mode="edge",
+                )
+                padded_bands[band_name] = padded
+            bands_to_write = padded_bands
+
         with tempfile.TemporaryDirectory(prefix="sr4rs_") as tmp_dir:
             tmp_path = Path(tmp_dir)
             input_path = tmp_path / "input.tif"
             output_path = tmp_path / "output.tif"
 
-            _write_stacked_tiff(input_path, request.native_bands, self.input_order)
+            _write_stacked_tiff(input_path, bands_to_write, self.input_order)
 
             command = [
                 self.python_executable,
@@ -238,6 +268,8 @@ class SR4RSInferenceEngine(BaseSREngine):
                 str(input_path),
                 "--output",
                 str(output_path),
+                "--ts",
+                str(ts_run),
             ]
 
             try:
@@ -263,7 +295,13 @@ class SR4RSInferenceEngine(BaseSREngine):
                     f"stdout={completed.stdout[-800:] if completed.stdout else ''}"
                 )
 
-            return _read_multiband_tiff(output_path, self.output_order)
+            out_bands = _read_multiband_tiff(output_path, self.output_order)
+            if need_pad:
+                out_h, out_w = height * scale, width * scale
+                out_bands = {
+                    k: v[:out_h, :out_w].copy() for k, v in out_bands.items()
+                }
+            return out_bands
 
 
 class S2DR3ExternalProviderEngine(BaseSREngine):
