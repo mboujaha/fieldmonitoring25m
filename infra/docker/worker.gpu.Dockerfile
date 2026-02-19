@@ -21,7 +21,8 @@ RUN mkdir -p /var/lib/apt/lists/partial && \
     && rm -rf /var/lib/apt/lists/*
 
 COPY apps/api/requirements.txt /workspace/apps/api/requirements.txt
-RUN pip3 install --no-cache-dir -r /workspace/apps/api/requirements.txt
+RUN python3 -m pip install --upgrade pip setuptools wheel && \
+    pip3 install --no-cache-dir -r /workspace/apps/api/requirements.txt
 
 RUN git clone --depth 1 https://github.com/remicres/sr4rs.git /opt/sr4rs
 

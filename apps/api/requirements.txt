@@ -7,7 +7,8 @@ alembic==1.14.0
 psycopg[binary]==3.2.3
 geoalchemy2==0.15.2
 shapely==2.0.6
-pyproj==3.7.0
+pyproj==3.7.0; python_version >= "3.10"
+pyproj==3.6.1; python_version < "3.10"
 python-multipart==0.0.17
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
@@ -18,8 +19,11 @@ celery==5.4.0
 httpx==0.28.1
 pystac-client==0.8.5
 planetary-computer==1.0.0
-numpy==2.1.3
-rasterio==1.4.2
+numpy==2.1.3; python_version >= "3.10"
+numpy==1.26.4; python_version == "3.9"
+numpy==1.24.4; python_version < "3.9"
+rasterio==1.4.2; python_version >= "3.10"
+rasterio==1.3.11; python_version < "3.10"
 boto3==1.35.66
 pillow==11.0.0
 structlog==24.4.0
