@@ -4,8 +4,14 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 from urllib.parse import urlparse, urlunparse
+from urllib.error import URLError, HTTPError
+from urllib.request import Request, urlopen
+import json
 
-import httpx
+try:
+    import httpx
+except ModuleNotFoundError:  # optional on older worker images
+    httpx = None
 try:
     import planetary_computer
 except ModuleNotFoundError:  # optional on older worker images
@@ -108,9 +114,14 @@ class PlanetaryComputerProvider:
             headers["Ocp-Apim-Subscription-Key"] = self.settings.pc_subscription_key
 
         try:
-            response = httpx.get(self._sas_token_url(collection_id), headers=headers, timeout=15.0)
-            response.raise_for_status()
-            payload = response.json()
+            if httpx is not None:
+                response = httpx.get(self._sas_token_url(collection_id), headers=headers, timeout=15.0)
+                response.raise_for_status()
+                payload = response.json()
+            else:
+                request = Request(self._sas_token_url(collection_id), headers=headers, method="GET")
+                with urlopen(request, timeout=15.0) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
         except Exception:
             return None
 
@@ -213,9 +224,18 @@ class PlanetaryComputerProvider:
         headers = {"Content-Type": "application/json"}
         if self.settings.pc_subscription_key:
             headers["Ocp-Apim-Subscription-Key"] = self.settings.pc_subscription_key
-        response = httpx.post(endpoint, json=payload, headers=headers, timeout=45.0)
-        response.raise_for_status()
-        body = response.json()
+        if httpx is not None:
+            response = httpx.post(endpoint, json=payload, headers=headers, timeout=45.0)
+            response.raise_for_status()
+            body = response.json()
+        else:
+            data = json.dumps(payload).encode("utf-8")
+            request = Request(endpoint, data=data, headers=headers, method="POST")
+            try:
+                with urlopen(request, timeout=45.0) as response:
+                    body = json.loads(response.read().decode("utf-8"))
+            except (HTTPError, URLError, ValueError):
+                return []
         features = body.get("features")
         if isinstance(features, list):
             return [item for item in features if isinstance(item, dict)]

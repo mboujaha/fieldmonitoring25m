@@ -8,8 +8,13 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
+from urllib.error import URLError, HTTPError
+from urllib.request import Request, urlopen
 
-import httpx
+try:
+    import httpx
+except ModuleNotFoundError:  # optional on older worker images
+    httpx = None
 import numpy as np
 import rasterio
 from rasterio.io import MemoryFile
@@ -148,10 +153,18 @@ class SR4RSInferenceEngine(BaseSREngine):
         with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_file:
             zip_path = Path(tmp_file.name)
 
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.get(self.model_url)
-            response.raise_for_status()
-            zip_path.write_bytes(response.content)
+        if httpx is not None:
+            with httpx.Client(timeout=self.timeout_seconds) as client:
+                response = client.get(self.model_url)
+                response.raise_for_status()
+                zip_path.write_bytes(response.content)
+        else:
+            request = Request(self.model_url, method="GET")
+            try:
+                with urlopen(request, timeout=self.timeout_seconds) as response:
+                    zip_path.write_bytes(response.read())
+            except (HTTPError, URLError) as exc:
+                raise SRInferenceError(f"SR4RS model download failed: {exc}") from exc
 
         try:
             with zipfile.ZipFile(zip_path) as archive:
@@ -257,10 +270,37 @@ class S2DR3ExternalProviderEngine(BaseSREngine):
             "source_assets": request.source_assets,
         }
 
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.post(self.endpoint, json=payload, headers=headers)
-            response.raise_for_status()
-            body = response.json()
+        if httpx is not None:
+            with httpx.Client(timeout=self.timeout_seconds) as client:
+                response = client.post(self.endpoint, json=payload, headers=headers)
+                response.raise_for_status()
+                body = response.json()
+
+                if isinstance(body, dict) and isinstance(body.get("bands"), dict):
+                    out: dict[str, np.ndarray] = {}
+                    for band_name in self.band_order:
+                        if band_name in body["bands"]:
+                            out[band_name] = np.asarray(body["bands"][band_name], dtype=np.float32)
+                    if out:
+                        return out
+
+                geotiff_url = body.get("geotiff_url") if isinstance(body, dict) else None
+                if geotiff_url:
+                    tif_response = client.get(geotiff_url, headers=headers)
+                    tif_response.raise_for_status()
+                    return _read_multiband_memory(tif_response.content, self.band_order)
+
+                geotiff_path = body.get("geotiff_path") if isinstance(body, dict) else None
+                if geotiff_path:
+                    return _read_multiband_tiff(Path(geotiff_path), self.band_order)
+        else:
+            data = json.dumps(payload).encode("utf-8")
+            post_request = Request(self.endpoint, data=data, headers=headers, method="POST")
+            try:
+                with urlopen(post_request, timeout=self.timeout_seconds) as response:
+                    body = json.loads(response.read().decode("utf-8"))
+            except (HTTPError, URLError, ValueError) as exc:
+                raise SRInferenceError(f"S2DR3 HTTP provider failed: {exc}") from exc
 
             if isinstance(body, dict) and isinstance(body.get("bands"), dict):
                 out: dict[str, np.ndarray] = {}
@@ -272,9 +312,14 @@ class S2DR3ExternalProviderEngine(BaseSREngine):
 
             geotiff_url = body.get("geotiff_url") if isinstance(body, dict) else None
             if geotiff_url:
-                tif_response = client.get(geotiff_url, headers=headers)
-                tif_response.raise_for_status()
-                return _read_multiband_memory(tif_response.content, self.band_order)
+                get_headers = {key: value for key, value in headers.items() if key.lower() != "content-type"}
+                tif_request = Request(geotiff_url, headers=get_headers, method="GET")
+                try:
+                    with urlopen(tif_request, timeout=self.timeout_seconds) as response:
+                        tif_payload = response.read()
+                except (HTTPError, URLError) as exc:
+                    raise SRInferenceError(f"S2DR3 GeoTIFF download failed: {exc}") from exc
+                return _read_multiband_memory(tif_payload, self.band_order)
 
             geotiff_path = body.get("geotiff_path") if isinstance(body, dict) else None
             if geotiff_path:
