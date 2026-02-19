@@ -147,7 +147,7 @@ services:
       - driver: nvidia
         count: 1
         capabilities: [gpu]
-    command: celery -A worker.celery_app.celery_app worker -Q sr_gpu -l info --concurrency=1
+    command: /workspace/apps/worker/scripts/start_gpu_worker.sh
 
   tiler:
     build:
