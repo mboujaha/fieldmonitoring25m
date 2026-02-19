@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
+from typing import List, Optional
 
 try:
     from enum import StrEnum
@@ -89,7 +90,7 @@ class User(TimestampMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
@@ -99,7 +100,7 @@ class Organization(TimestampMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    created_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
 
 class Membership(TimestampMixin, Base):
@@ -132,7 +133,7 @@ class Farm(TimestampMixin, Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class Field(TimestampMixin, Base):
@@ -151,7 +152,7 @@ class FieldRevision(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     field_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("fields.id"), nullable=False)
-    changed_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    changed_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     geometry: Mapped[str] = mapped_column(Geometry("MULTIPOLYGON", srid=4326), nullable=False)
     area_ha: Mapped[float] = mapped_column(Float, nullable=False)
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -166,8 +167,8 @@ class SceneCandidate(TimestampMixin, Base):
     collection: Mapped[str] = mapped_column(String(100), nullable=False)
     scene_id: Mapped[str] = mapped_column(String(255), nullable=False)
     acquisition_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    cloud_cover: Mapped[float | None] = mapped_column(Float, nullable=True)
-    valid_pixel_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cloud_cover: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    valid_pixel_ratio: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     assets_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
 
@@ -178,7 +179,7 @@ class SRModelProfile(TimestampMixin, Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     version: Mapped[str] = mapped_column(String(32), nullable=False)
-    supported_bands: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    supported_bands: Mapped[List[str]] = mapped_column(JSONB, default=list, nullable=False)
     scale_factor: Mapped[float] = mapped_column(Float, nullable=False, default=2.0)
     runtime_class: Mapped[str] = mapped_column(String(20), nullable=False, default="CPU")
 
@@ -193,11 +194,11 @@ class Observation(TimestampMixin, Base):
     status: Mapped[ObservationStatusEnum] = mapped_column(
         Enum(ObservationStatusEnum, name="observation_status_enum"), nullable=False
     )
-    cloud_cover: Mapped[float | None] = mapped_column(Float, nullable=True)
-    valid_pixel_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cloud_cover: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    valid_pixel_ratio: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     indices_native: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     indices_sr: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
-    sr_model_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+    sr_model_profile_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("sr_model_profiles.id"), nullable=True
     )
 
@@ -207,12 +208,12 @@ class AnalysisJob(TimestampMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     field_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("fields.id"), nullable=False)
-    requested_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    requested_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     status: Mapped[JobStatusEnum] = mapped_column(Enum(JobStatusEnum, name="job_status_enum"), nullable=False)
     queue: Mapped[str] = mapped_column(String(50), nullable=False, default="analysis_cpu")
     params_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     result_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class LayerAsset(TimestampMixin, Base):
@@ -220,11 +221,11 @@ class LayerAsset(TimestampMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     field_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("fields.id"), nullable=False)
-    observation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("observations.id"), nullable=True)
+    observation_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("observations.id"), nullable=True)
     layer_type: Mapped[LayerTypeEnum] = mapped_column(Enum(LayerTypeEnum, name="layer_type_enum"), nullable=False)
-    index_name: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    index_name: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     source_uri: Mapped[str] = mapped_column(Text, nullable=False)
-    tilejson_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tilejson_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_model_derived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     metadata_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
@@ -234,13 +235,13 @@ class AlertEvent(TimestampMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False)
-    field_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("fields.id"), nullable=True)
+    field_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("fields.id"), nullable=True)
     severity: Mapped[AlertSeverityEnum] = mapped_column(Enum(AlertSeverityEnum, name="alert_severity_enum"), nullable=False)
     category: Mapped[str] = mapped_column(String(100), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     metadata_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
-    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    acknowledged_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    acknowledged_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
 
 class ExportJob(TimestampMixin, Base):
@@ -248,12 +249,12 @@ class ExportJob(TimestampMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     field_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("fields.id"), nullable=False)
-    requested_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    requested_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     format: Mapped[ExportFormatEnum] = mapped_column(Enum(ExportFormatEnum, name="export_format_enum"), nullable=False)
     status: Mapped[JobStatusEnum] = mapped_column(Enum(JobStatusEnum, name="export_job_status_enum"), nullable=False)
     params_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
-    output_uri: Mapped[str | None] = mapped_column(Text, nullable=True)
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    output_uri: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class FeatureFlag(TimestampMixin, Base):
@@ -270,10 +271,10 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=True)
-    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=True)
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     action: Mapped[str] = mapped_column(String(100), nullable=False)
     resource_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    resource_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    resource_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     details_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
