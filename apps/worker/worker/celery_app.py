@@ -12,6 +12,7 @@ celery_app = Celery(
 )
 
 celery_app.conf.update(
+    broker_connection_retry_on_startup=True,
     task_routes={
         "worker.tasks.run_analysis_task": {"queue": "analysis_cpu"},
         "worker.tasks.run_export_task": {"queue": "exports"},
