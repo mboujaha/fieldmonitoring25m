@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHint, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { ExportJob, ImageryItem } from "@/lib/api";
+import { AnalysisJob, ExportJob, ImageryItem } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface RightPanelProps {
@@ -26,6 +26,8 @@ interface RightPanelProps {
   onClearTimeline: () => Promise<void>;
   onClearAlerts: () => Promise<void>;
   onCreateExport: (format: "CSV" | "PNG" | "GEOTIFF") => Promise<void>;
+  latestAnalysis: AnalysisJob | null;
+  isAnalysisPolling: boolean;
   latestExport: ExportJob | null;
   onUpdateSchedule: (payload: {
     enabled: boolean;
@@ -70,6 +72,8 @@ export function RightPanel({
   onClearTimeline,
   onClearAlerts,
   onCreateExport,
+  latestAnalysis,
+  isAnalysisPolling,
   latestExport,
   onUpdateSchedule,
   isExporting,
@@ -87,6 +91,11 @@ export function RightPanel({
   const [scheduleTimezone, setScheduleTimezone] = useState("UTC");
   const [scheduleLocalTime, setScheduleLocalTime] = useState("06:00");
   const [scheduleFrequency, setScheduleFrequency] = useState<"daily" | "weekly">("daily");
+
+  const analysisResult =
+    latestAnalysis?.result_json && typeof latestAnalysis.result_json === "object" && !Array.isArray(latestAnalysis.result_json)
+      ? latestAnalysis.result_json
+      : null;
 
   useEffect(() => {
     if (!selectedField?.schedule) {
@@ -265,6 +274,67 @@ export function RightPanel({
             {isUpdatingSchedule ? "Saving..." : "Save Schedule"}
           </Button>
         </div>
+      </Card>
+
+      <Card>
+        <div className="mb-2 flex items-center justify-between">
+          <CardTitle>Latest Analysis</CardTitle>
+          <Badge variant={latestAnalysis ? statusVariant(latestAnalysis.status) : "soft"}>
+            {latestAnalysis ? latestAnalysis.status.replaceAll("_", " ") : "No job"}
+          </Badge>
+        </div>
+        {!latestAnalysis ? (
+          <CardHint>Run analysis to track progress and result details here.</CardHint>
+        ) : (
+          <div className="space-y-2 text-xs text-[var(--ink-600)]">
+            <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-1)] px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wide text-[var(--ink-400)]">Job ID</div>
+              <div className="mt-1 truncate font-semibold text-[var(--ink-800)]">{latestAnalysis.id}</div>
+            </div>
+            {analysisResult && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-1)] px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-[var(--ink-400)]">Scene</div>
+                  <div className="mt-1 truncate font-semibold text-[var(--ink-800)]">
+                    {typeof analysisResult.scene_id === "string" ? analysisResult.scene_id : "-"}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-1)] px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-[var(--ink-400)]">Cloud</div>
+                  <div className="mt-1 font-semibold text-[var(--ink-800)]">
+                    {typeof analysisResult.cloud_cover === "number" ? `${analysisResult.cloud_cover.toFixed(2)}%` : "-"}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-1)] px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-[var(--ink-400)]">Valid Pixels</div>
+                  <div className="mt-1 font-semibold text-[var(--ink-800)]">
+                    {typeof analysisResult.valid_pixel_ratio === "number"
+                      ? `${(analysisResult.valid_pixel_ratio * 100).toFixed(1)}%`
+                      : "-"}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-1)] px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-[var(--ink-400)]">Reason</div>
+                  <div className="mt-1 truncate font-semibold text-[var(--ink-800)]">
+                    {typeof analysisResult.reason === "string"
+                      ? analysisResult.reason.replaceAll("_", " ")
+                      : typeof analysisResult.status === "string"
+                        ? analysisResult.status.replaceAll("_", " ")
+                        : "-"}
+                  </div>
+                </div>
+              </div>
+            )}
+            {latestAnalysis.status === "FAILED" && latestAnalysis.error_message && (
+              <CardHint className="rounded-md border border-[var(--warn-300)] bg-[var(--warn-100)] px-2 py-1 text-[var(--warn-700)]">
+                {latestAnalysis.error_message}
+              </CardHint>
+            )}
+            {(latestAnalysis.status === "QUEUED" || latestAnalysis.status === "RUNNING") && (
+              <CardHint>{isAnalysisPolling ? "Refreshing analysis status..." : "Waiting for worker update..."}</CardHint>
+            )}
+          </div>
+        )}
       </Card>
 
       <Card>

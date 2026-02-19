@@ -399,6 +399,36 @@ def create_analysis(
     return AnalysisJobResponse(id=str(job.id), status=job.status.value, queue=job.queue)
 
 
+@router.get("/{field_id}/analyses/{job_id}", response_model=AnalysisJobResponse)
+def get_analysis_job(
+    field_id: UUID,
+    job_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AnalysisJobResponse:
+    field = db.get(Field, field_id)
+    if field is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Field not found")
+
+    farm = db.get(Farm, field.farm_id)
+    if farm is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found")
+
+    require_org_role(org_id=farm.organization_id, user_id=current_user.id, db=db, minimum=RoleEnum.VIEWER)
+
+    job = db.get(AnalysisJob, job_id)
+    if job is None or job.field_id != field.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis job not found")
+
+    return AnalysisJobResponse(
+        id=str(job.id),
+        status=job.status.value,
+        queue=job.queue,
+        error_message=job.error_message,
+        result_json=job.result_json if isinstance(job.result_json, dict) else None,
+    )
+
+
 @router.get("/{field_id}/timeseries", response_model=TimeSeriesResponse)
 def get_timeseries(
     field_id: UUID,

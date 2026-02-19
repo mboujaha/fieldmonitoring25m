@@ -15,6 +15,7 @@ import {
   createExport,
   createField,
   createOrganization,
+  getAnalysisJob,
   getExportJob,
   getTimeseries,
   ImageryItem,
@@ -38,13 +39,65 @@ function errorToMessage(error: unknown): string {
   return "Unexpected error";
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function formatAnalysisSuccessMessage(jobId: string, result: Record<string, unknown> | null): string {
+  if (!result) {
+    return `Analysis completed: ${jobId}`;
+  }
+
+  const sceneId = typeof result.scene_id === "string" ? result.scene_id : null;
+  const cloudCover = typeof result.cloud_cover === "number" ? result.cloud_cover : null;
+  const validPixelRatio = typeof result.valid_pixel_ratio === "number" ? result.valid_pixel_ratio : null;
+  const nativeIndices = Array.isArray(result.native_indices) ? result.native_indices.length : null;
+  const srIndices = Array.isArray(result.sr_indices) ? result.sr_indices.length : null;
+
+  const details: string[] = [];
+  if (sceneId) details.push(`scene ${sceneId}`);
+  if (cloudCover !== null) details.push(`cloud ${cloudCover.toFixed(2)}%`);
+  if (validPixelRatio !== null) details.push(`valid ${(validPixelRatio * 100).toFixed(1)}%`);
+  if (nativeIndices !== null) details.push(`native idx ${nativeIndices}`);
+  if (srIndices !== null) details.push(`sr idx ${srIndices}`);
+
+  if (details.length === 0) {
+    return `Analysis completed: ${jobId}`;
+  }
+  return `Analysis completed: ${details.join(" • ")}`;
+}
+
+function formatAnalysisSkippedMessage(jobId: string, result: Record<string, unknown> | null): string {
+  if (!result) {
+    return `Analysis skipped: ${jobId}`;
+  }
+
+  const reason = typeof result.reason === "string" ? result.reason : typeof result.status === "string" ? result.status : null;
+  const sceneId = typeof result.scene_id === "string" ? result.scene_id : null;
+  const details: string[] = [];
+  if (reason) details.push(reason.replaceAll("_", " "));
+  if (sceneId) details.push(`scene ${sceneId}`);
+  if (typeof result.cloud_cover === "number") details.push(`cloud ${result.cloud_cover.toFixed(2)}%`);
+  if (typeof result.valid_pixel_ratio === "number") details.push(`valid ${(result.valid_pixel_ratio * 100).toFixed(1)}%`);
+
+  if (details.length === 0) {
+    return `Analysis skipped: ${jobId}`;
+  }
+  return `Analysis skipped: ${details.join(" • ")}`;
+}
+
 export default function HomePage() {
   const queryClient = useQueryClient();
   const [statusMessage, setStatusMessage] = useState<string>("Ready");
   const [selectedFarmId, setSelectedFarmId] = useState<string>("");
   const [imageryResults, setImageryResults] = useState<ImageryItem[]>([]);
   const [selectedSceneId, setSelectedSceneId] = useState<string>("");
+  const [latestAnalysisId, setLatestAnalysisId] = useState<string>("");
   const [latestExportId, setLatestExportId] = useState<string>("");
+  const latestAnalysisStatusRef = useRef<string>("");
   const latestExportStatusRef = useRef<string>("");
 
   const {
@@ -153,6 +206,20 @@ export default function HomePage() {
     },
   });
 
+  const analysisStatusQuery = useQuery({
+    queryKey: ["analysis-job", selectedFieldId, latestAnalysisId, token],
+    queryFn: () => getAnalysisJob(selectedFieldId, latestAnalysisId, token),
+    enabled: Boolean(token && selectedFieldId && latestAnalysisId),
+    retry: false,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === "QUEUED" || status === "RUNNING") {
+        return 2_000;
+      }
+      return false;
+    },
+  });
+
   const createFieldMutation = useMutation({
     mutationFn: (payload: { farmId: string; name: string }) => {
       if (!drawnGeometry) {
@@ -223,8 +290,9 @@ export default function HomePage() {
         token,
       ),
     onSuccess: (job) => {
+      setLatestAnalysisId(job.id);
+      latestAnalysisStatusRef.current = "";
       setStatusMessage(`Analysis queued: ${job.id}`);
-      queryClient.invalidateQueries({ queryKey: ["timeseries", selectedFieldId, selectedIndex, token] });
     },
     onError: (error) => {
       handleAuthFailure(error, `Analysis queue failed: ${errorToMessage(error)}`);
@@ -340,6 +408,8 @@ export default function HomePage() {
   useEffect(() => {
     setImageryResults([]);
     setSelectedSceneId("");
+    setLatestAnalysisId("");
+    latestAnalysisStatusRef.current = "";
     setLatestExportId("");
     latestExportStatusRef.current = "";
   }, [selectedFieldId]);
@@ -381,11 +451,60 @@ export default function HomePage() {
   }, [fieldsQuery.error]);
 
   useEffect(() => {
+    if (!analysisStatusQuery.error) {
+      return;
+    }
+    handleAuthFailure(analysisStatusQuery.error, `Analysis status check failed: ${errorToMessage(analysisStatusQuery.error)}`);
+  }, [analysisStatusQuery.error]);
+
+  useEffect(() => {
     if (!exportStatusQuery.error) {
       return;
     }
     handleAuthFailure(exportStatusQuery.error, `Export status check failed: ${errorToMessage(exportStatusQuery.error)}`);
   }, [exportStatusQuery.error]);
+
+  useEffect(() => {
+    const analysisJob = analysisStatusQuery.data;
+    if (!analysisJob) {
+      return;
+    }
+
+    const marker = `${analysisJob.id}:${analysisJob.status}`;
+    if (latestAnalysisStatusRef.current === marker) {
+      return;
+    }
+    latestAnalysisStatusRef.current = marker;
+
+    if (analysisJob.status === "QUEUED") {
+      setStatusMessage(`Analysis queued: ${analysisJob.id}`);
+      return;
+    }
+    if (analysisJob.status === "RUNNING") {
+      setStatusMessage(`Analysis running: ${analysisJob.id}`);
+      return;
+    }
+
+    const result = asRecord(analysisJob.result_json);
+    if (analysisJob.status === "SUCCEEDED") {
+      setStatusMessage(formatAnalysisSuccessMessage(analysisJob.id, result));
+      queryClient.invalidateQueries({ queryKey: ["timeseries", selectedFieldId, selectedIndex, token] });
+      queryClient.invalidateQueries({ queryKey: ["alerts", token] });
+      return;
+    }
+
+    if (analysisJob.status === "SKIPPED") {
+      setStatusMessage(formatAnalysisSkippedMessage(analysisJob.id, result));
+      queryClient.invalidateQueries({ queryKey: ["timeseries", selectedFieldId, selectedIndex, token] });
+      queryClient.invalidateQueries({ queryKey: ["alerts", token] });
+      return;
+    }
+
+    if (analysisJob.status === "FAILED") {
+      setStatusMessage(`Analysis failed: ${analysisJob.error_message || analysisJob.id}`);
+      queryClient.invalidateQueries({ queryKey: ["alerts", token] });
+    }
+  }, [analysisStatusQuery.data, queryClient, selectedFieldId, selectedIndex, token]);
 
   useEffect(() => {
     const exportJob = exportStatusQuery.data;
@@ -489,6 +608,8 @@ export default function HomePage() {
               clearSession();
               setSelectedFarmId("");
               setSelectedFieldId("");
+              setLatestAnalysisId("");
+              latestAnalysisStatusRef.current = "";
               setLatestExportId("");
               latestExportStatusRef.current = "";
               setStatusMessage("Signed out.");
@@ -573,6 +694,8 @@ export default function HomePage() {
               if (!selectedFieldId) throw new Error("Select a field first.");
               await scheduleMutation.mutateAsync(payload);
             }}
+            latestAnalysis={analysisStatusQuery.data ?? null}
+            isAnalysisPolling={analysisStatusQuery.isFetching}
             latestExport={exportStatusQuery.data ?? null}
             isExporting={exportMutation.isPending}
             isExportPolling={exportStatusQuery.isFetching}

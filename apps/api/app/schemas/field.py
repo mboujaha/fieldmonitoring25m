@@ -58,6 +58,8 @@ class AnalysisJobResponse(BaseModel):
     id: str
     status: str
     queue: str
+    error_message: str | None = None
+    result_json: dict[str, Any] | None = None
 
 
 class TimeSeriesPoint(BaseModel):

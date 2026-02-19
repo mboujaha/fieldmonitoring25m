@@ -118,6 +118,8 @@ export interface AnalysisJob {
   id: string;
   status: string;
   queue: string;
+  error_message?: string;
+  result_json?: Record<string, unknown> | null;
 }
 
 export interface ExportJob {
@@ -229,6 +231,10 @@ export async function startAnalysis(fieldId: string, payload: StartAnalysisPaylo
     method: "POST",
     body: JSON.stringify(payload),
   }, token);
+}
+
+export async function getAnalysisJob(fieldId: string, jobId: string, token: string): Promise<AnalysisJob> {
+  return request<AnalysisJob>(`/api/v1/fields/${fieldId}/analyses/${jobId}`, {}, token);
 }
 
 export async function getTimeseries(
