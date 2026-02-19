@@ -1,0 +1,193 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local ${S3_ENDPOINT_URL} ${S3_ACCESS_KEY} ${S3_SECRET_KEY}; do echo waiting for minio; sleep 2; done;
+      mc mb --ignore-existing local/${S3_BUCKET};
+      mc anonymous set private local/${S3_BUCKET};
+      exit 0;
+      "
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    restart: unless-stopped
+    profiles: ["dev", "prod"]
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /workspace/apps/api:/workspace/apps/worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./apps/api:/workspace/apps/api
+      - ./apps/worker:/workspace/apps/worker
+      - ./infra/migrations:/workspace/infra/migrations
+    command: >
+      /bin/sh -c "
+      if [ \"${APP_ENV}\" = \"development\" ]; then
+        uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload;
+      else
+        uvicorn app.main:app --host 0.0.0.0 --port 8002;
+      fi"
+
+  worker-cpu:
+    build:
+      context: .
+      dockerfile: infra/docker/worker.Dockerfile
+    restart: unless-stopped
+    profiles: ["dev", "prod"]
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /workspace/apps/api:/workspace/apps/worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./apps/api:/workspace/apps/api
+      - ./apps/worker:/workspace/apps/worker
+    command: celery -A worker.celery_app.celery_app worker -Q analysis_cpu,exports -l info --concurrency=2
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: infra/docker/worker.Dockerfile
+    restart: unless-stopped
+    profiles: ["dev", "prod"]
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /workspace/apps/api:/workspace/apps/worker
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./apps/api:/workspace/apps/api
+      - ./apps/worker:/workspace/apps/worker
+    command: celery -A worker.celery_app.celery_app beat -l info
+
+  worker-gpu:
+    build:
+      context: .
+      dockerfile: infra/docker/worker.gpu.Dockerfile
+    restart: unless-stopped
+    profiles: ["prod", "gpu"]
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /workspace/apps/api:/workspace/apps/worker
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./apps/api:/workspace/apps/api
+      - ./apps/worker:/workspace/apps/worker
+      - ./storage/sr4rs-cache:/workspace/.cache/sr4rs
+    gpus:
+      - driver: nvidia
+        count: 1
+        capabilities: [gpu]
+    command: celery -A worker.celery_app.celery_app worker -Q sr_gpu -l info --concurrency=1
+
+  tiler:
+    build:
+      context: .
+      dockerfile: infra/docker/tiler.Dockerfile
+    restart: unless-stopped
+    profiles: ["dev", "prod"]
+    env_file:
+      - .env
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "8081:8081"
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+    restart: unless-stopped
+    profiles: ["dev", "prod"]
+    env_file:
+      - .env
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/web:/workspace/apps/web
+      - ./packages/shared-types:/workspace/packages/shared-types
+      - /workspace/apps/web/node_modules
+    command: >
+      /bin/sh -c "
+      if [ \"${APP_ENV}\" = \"development\" ]; then
+        rm -rf .next && npm install && npm run dev;
+      else
+        npm install && npm run build && npm run start;
+      fi"
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

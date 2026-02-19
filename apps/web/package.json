@@ -1,0 +1,38 @@
+{
+  "name": "fieldmonitor-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fieldmonitor/shared-types": "file:../../packages/shared-types",
+    "@mapbox/mapbox-gl-draw": "1.5.0",
+    "@radix-ui/react-popover": "^1.1.15",
+    "@tanstack/react-query": "5.62.7",
+    "clsx": "2.1.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.575.0",
+    "maplibre-gl": "5.0.0",
+    "next": "15.0.3",
+    "react": "18.3.1",
+    "react-day-picker": "^9.13.2",
+    "react-dom": "18.3.1",
+    "zustand": "5.0.1"
+  },
+  "devDependencies": {
+    "@types/geojson": "7946.0.15",
+    "@types/mapbox__mapbox-gl-draw": "1.4.9",
+    "@types/node": "22.10.1",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "autoprefixer": "10.4.20",
+    "postcss": "8.4.49",
+    "tailwindcss": "3.4.15",
+    "typescript": "5.7.2"
+  }
+}

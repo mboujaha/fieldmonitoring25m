@@ -1,0 +1,16 @@
+[project]
+name = "fieldmonitor-api"
+version = "0.1.0"
+description = "Hybrid agriculture monitoring API"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
