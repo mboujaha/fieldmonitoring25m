@@ -344,6 +344,11 @@ export function RightPanel({
                 {latestAnalysis.error_message}
               </CardHint>
             )}
+            {analysisResult && typeof analysisResult.sr_error === "string" && analysisResult.sr_error.trim() && (
+              <CardHint className="rounded-md border border-[var(--warn-300)] bg-[var(--warn-100)] px-2 py-1 text-[var(--warn-700)]">
+                SR error: {analysisResult.sr_error}
+              </CardHint>
+            )}
             {(latestAnalysis.status === "QUEUED" || latestAnalysis.status === "RUNNING") && (
               <CardHint>{isAnalysisPolling ? "Refreshing analysis status..." : "Waiting for worker update..."}</CardHint>
             )}

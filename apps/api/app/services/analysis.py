@@ -443,6 +443,7 @@ def run_analysis_job(db: Session, job: AnalysisJob) -> dict[str, Any]:
     sr_analytics_enabled = include_sr and is_enabled(db, str(farm.organization_id), "sr_analytics_enabled")
     sr_transform = native_transform
     sr_resolution_m = 2.5
+    sr_error: str | None = None
 
     if sr_requested:
         try:
@@ -489,6 +490,7 @@ def run_analysis_job(db: Session, job: AnalysisJob) -> dict[str, Any]:
                     target_shape=first_band_shape,
                 )
         except SRInferenceError as exc:
+            sr_error = str(exc)
             create_alert(
                 db=db,
                 organization_id=str(farm.organization_id),
@@ -621,6 +623,7 @@ def run_analysis_job(db: Session, job: AnalysisJob) -> dict[str, Any]:
         "sr_requested": sr_requested,
         "sr_analytics_enabled": sr_analytics_enabled,
         "sr_visualization_generated": bool(sr_bands),
+        "sr_error": sr_error,
     }
     db.flush()
     return job.result_json
