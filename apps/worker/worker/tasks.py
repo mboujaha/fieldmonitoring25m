@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 try:
     from zoneinfo import ZoneInfo
 except ImportError:  # Python < 3.9
@@ -11,7 +12,6 @@ from celery.utils.log import get_task_logger
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.models import AnalysisJob, ExportJob, Field, JobStatusEnum
 from worker.celery_app import celery_app
 
 logger = get_task_logger(__name__)
@@ -33,7 +33,7 @@ def _parse_hhmm(value: str) -> tuple[int, int]:
     return hour, minute
 
 
-def _should_enqueue(field: Field, now_utc: datetime) -> bool:
+def _should_enqueue(field: Any, now_utc: datetime) -> bool:
     metadata = dict(field.metadata_json or {})
     schedule = metadata.get("schedule")
     if not isinstance(schedule, dict):
@@ -76,6 +76,7 @@ def _should_enqueue(field: Field, now_utc: datetime) -> bool:
 
 @celery_app.task(name="worker.tasks.run_analysis_task")
 def run_analysis_task(job_id: str) -> dict:
+    from app.models import AnalysisJob, JobStatusEnum
     from app.services.analysis import run_analysis_job
 
     db = _session()
@@ -100,6 +101,7 @@ def run_analysis_task(job_id: str) -> dict:
 
 @celery_app.task(name="worker.tasks.run_export_task")
 def run_export_task(export_id: str) -> dict:
+    from app.models import ExportJob, JobStatusEnum
     from app.services.exports import run_export_job
 
     db = _session()
@@ -130,6 +132,8 @@ def run_sr_task(payload: dict) -> dict:
 
 @celery_app.task(name="worker.tasks.schedule_daily_attempts")
 def schedule_daily_attempts() -> dict:
+    from app.models import AnalysisJob, Field, JobStatusEnum
+
     db = _session()
     scheduled = 0
     try:
