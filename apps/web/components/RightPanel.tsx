@@ -323,6 +323,20 @@ export function RightPanel({
                         : "-"}
                   </div>
                 </div>
+                <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-1)] px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-[var(--ink-400)]">SR Requested</div>
+                  <div className="mt-1 font-semibold text-[var(--ink-800)]">
+                    {typeof analysisResult.sr_requested === "boolean" ? (analysisResult.sr_requested ? "Yes" : "No") : "-"}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-1)] px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-[var(--ink-400)]">SR Layer Produced</div>
+                  <div className="mt-1 font-semibold text-[var(--ink-800)]">
+                    {typeof analysisResult.sr_visualization_generated === "boolean"
+                      ? (analysisResult.sr_visualization_generated ? "Yes" : "No")
+                      : "-"}
+                  </div>
+                </div>
               </div>
             )}
             {latestAnalysis.status === "FAILED" && latestAnalysis.error_message && (

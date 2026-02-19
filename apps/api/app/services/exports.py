@@ -12,7 +12,8 @@ from PIL import Image, ImageDraw
 from rasterio.io import MemoryFile
 from sqlalchemy.orm import Session
 
-from app.models import ExportFormatEnum, ExportJob, Field, JobStatusEnum, LayerAsset, LayerTypeEnum, Observation
+from app.core.config import get_settings
+from app.models import AnalysisJob, ExportFormatEnum, ExportJob, Field, JobStatusEnum, LayerAsset, LayerTypeEnum, Observation
 from app.services.storage import build_object_key, download_bytes as download_object_storage_bytes, upload_bytes
 
 
@@ -186,6 +187,7 @@ def _build_png_export_from_layer(field_name: str, layer: LayerAsset | None, metr
 def run_export_job(db: Session, export_job: ExportJob) -> dict:
     export_job.status = JobStatusEnum.RUNNING
     db.flush()
+    settings = get_settings()
 
     field = db.get(Field, export_job.field_id)
     if field is None:
@@ -204,9 +206,43 @@ def run_export_job(db: Session, export_job: ExportJob) -> dict:
     )
 
     if requested_source_mode == "sr" and (selected_layer is None or not selected_layer.is_model_derived):
+        latest_job = (
+            db.query(AnalysisJob)
+            .filter(AnalysisJob.field_id == field.id)
+            .order_by(AnalysisJob.created_at.desc())
+            .first()
+        )
+        details: list[str] = []
+        if latest_job is None:
+            details.append("no analysis jobs found")
+        else:
+            details.append(f"last_job={latest_job.id}")
+            details.append(f"last_job_status={latest_job.status.value}")
+            result = latest_job.result_json if isinstance(latest_job.result_json, dict) else {}
+            result_status = result.get("status")
+            if isinstance(result_status, str):
+                details.append(f"result_status={result_status}")
+            reason = result.get("reason")
+            if isinstance(reason, str):
+                details.append(f"reason={reason}")
+            sr_visualization_generated = result.get("sr_visualization_generated")
+            if isinstance(sr_visualization_generated, bool):
+                details.append(f"sr_visualization_generated={str(sr_visualization_generated).lower()}")
+            sr_requested = result.get("sr_requested")
+            if isinstance(sr_requested, bool):
+                details.append(f"sr_requested={str(sr_requested).lower()}")
+            sr_provider = result.get("sr_provider")
+            if isinstance(sr_provider, str) and sr_provider:
+                details.append(f"sr_provider={sr_provider}")
+
+        if settings.app_env.strip().lower() in {"development", "dev"}:
+            details.append("APP_ENV is development; SR4RS jobs may be routed to analysis_cpu instead of sr_gpu")
+
+        detail_text = ", ".join(details) if details else "unknown cause"
         raise RuntimeError(
             "No SR MODEL_DERIVED layer available for export. "
-            "Run analysis with SR enabled and a working SR provider, then retry."
+            "Run analysis with SR enabled and a working SR provider, then retry. "
+            f"Diagnostics: {detail_text}"
         )
 
     if export_job.format == ExportFormatEnum.CSV:
