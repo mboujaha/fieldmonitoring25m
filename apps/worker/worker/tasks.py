@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # Python < 3.9
+    ZoneInfo = None
 
 from celery.utils.log import get_task_logger
 from sqlalchemy.orm import Session
@@ -41,7 +44,7 @@ def _should_enqueue(field: Field, now_utc: datetime) -> bool:
 
     tz_name = str(schedule.get("timezone") or "UTC")
     try:
-        tz = ZoneInfo(tz_name)
+        tz = ZoneInfo(tz_name) if ZoneInfo is not None else timezone.utc
     except Exception:
         tz = timezone.utc
         tz_name = "UTC"
