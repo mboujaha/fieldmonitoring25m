@@ -819,16 +819,10 @@ export function MapWorkspace({
 
       if (mapMode === "SWIPE" || mapMode === "SIDE_BY_SIDE") {
         // For NATIVE, only draw on LEFT side
-        map.setCustomLayerClipping({
+        (map as any).setCustomLayerClipping?.({
           layerId: NATIVE_RASTER_LAYER_ID,
           clipRect: [0, 0, splitX, height]
-        } as any); // fallback for custom clipping, typically requires a custom layer or scissors
-
-        // For MapLibre GL JS, scissor testing is the global way to handle swipe.
-        // A simpler way without maplibre clipping hacks is to wait for the layer to render
-        // Actually, maplibre-gl doesn't expose clipping rects dynamically per layer natively without a plugin. 
-        // Since we are limited, we'll manually apply a CSS clip-path to a duplicate map if possible, 
-        // OR wait... the user wanted it "Swipe" map comparison. If my scissor hack fails, we can do it via CSS overlay if we had 2 maps.
+        });
       }
     };
 
