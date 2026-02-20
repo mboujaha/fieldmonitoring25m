@@ -231,13 +231,21 @@ class SR4RSInferenceEngine(BaseSREngine):
         if height == 0 or width == 0:
             raise SRInferenceError("SR4RS input has zero height or width")
 
-        ts_run = min(self.tile_size, height, width)
-        if ts_run < self.min_patch:
-            ts_run = self.min_patch
-        need_pad = height < ts_run or width < ts_run
-        padded_h = max(height, ts_run) if need_pad else height
-        padded_w = max(width, ts_run) if need_pad else width
         scale = self._capabilities.scale_factor
+        align = max(64, self.min_patch)
+
+        if max(height, width) <= self.tile_size:
+            ts_run = ((max(height, width) + align - 1) // align) * align
+            if ts_run < self.min_patch:
+                ts_run = ((self.min_patch + align - 1) // align) * align
+            padded_h = ts_run
+            padded_w = ts_run
+        else:
+            ts_run = ((self.tile_size + align - 1) // align) * align
+            padded_h = ((height + ts_run - 1) // ts_run) * ts_run
+            padded_w = ((width + ts_run - 1) // ts_run) * ts_run
+
+        need_pad = (padded_h > height) or (padded_w > width)
 
         bands_to_write = request.native_bands
         if need_pad:

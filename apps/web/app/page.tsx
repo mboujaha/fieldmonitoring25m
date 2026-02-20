@@ -659,6 +659,9 @@ export default function HomePage() {
               onSceneSelect={setSelectedSceneId}
               selectedFieldId={selectedFieldId}
               selectedFieldGeometry={selectedFieldGeometry}
+              points={points}
+              selectedIndex={selectedIndex}
+              token={token}
             />
             <div className="absolute bottom-4 right-4 z-10 max-w-[420px] rounded-xl border border-[var(--line-strong)] bg-[rgba(7,16,29,0.84)] px-4 py-2 text-xs font-medium text-[var(--ink-800)] shadow-[0_14px_26px_rgba(0,0,0,0.34)]">
               {statusMessage}
