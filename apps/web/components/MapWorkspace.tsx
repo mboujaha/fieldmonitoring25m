@@ -520,6 +520,14 @@ export function MapWorkspace({
   }, [activePoint, selectedIndex, token]);
 
   useEffect(() => {
+    console.log("----- SWIPE DEBUG VERIFICATION -----");
+    console.log("Selected Index:", selectedIndex);
+    console.log("Active Point:", activePoint);
+    console.log("Native Tile URL:", nativeTileUrl);
+    console.log("SR Tile URL:", srTileUrl);
+  }, [activePoint, nativeTileUrl, srTileUrl]);
+
+  useEffect(() => {
     onSceneSelectRef.current = onSceneSelect;
   }, [onSceneSelect]);
 
